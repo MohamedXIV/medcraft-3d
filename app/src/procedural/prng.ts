@@ -44,30 +44,46 @@ export interface BuildingConfig {
   shutterColor: string;
   awningColor: string;
   roofColor: string;
+  flowerColor: string;
   weathering: number;
   lighting: LightingMode;
   showSidewalk: boolean;
+  hasAwning: boolean;
+  hasVines: boolean;
+  hasRooftopProps: boolean;
+  postFxEnabled: boolean;
+  bloomIntensity: number;
 }
 
 export const BUILDING_PRESETS: Record<string, { label: string; subtitle: string; config: Partial<BuildingConfig> }> = {
   corner_pharmacy: {
     label: 'ناصية وصيدلية',
     subtitle: 'سطح مستوي + خزان مياه',
-    config: { width: 9.0, depth: 7.0, floors: 2, floorHeight: 3.1, roofType: 'flat', wallColor: '#e8d7c3', trimColor: '#f5ece0', shutterColor: '#2f7a57', awningColor: '#2a8058', roofColor: '#c86442', weathering: 0.65 }
+    config: { width: 9.0, depth: 7.0, floors: 2, floorHeight: 3.1, roofType: 'flat', wallColor: '#e8d7c3', trimColor: '#f5ece0', shutterColor: '#2f7a57', awningColor: '#2a8058', roofColor: '#c86442', weathering: 0.65, hasAwning: true, hasVines: false, hasRooftopProps: true }
   },
   cafe_townhouse: {
     label: 'كافيه وسكني',
     subtitle: 'تندة مخططة + طاولات',
-    config: { width: 8.5, depth: 7.0, floors: 2, floorHeight: 3.1, roofType: 'flat', wallColor: '#e5b869', trimColor: '#f7ebd4', shutterColor: '#3c6e47', awningColor: '#c45647', roofColor: '#c86442', weathering: 0.7 }
+    config: { width: 8.5, depth: 7.0, floors: 2, floorHeight: 3.1, roofType: 'flat', wallColor: '#e5b869', trimColor: '#f7ebd4', shutterColor: '#3c6e47', awningColor: '#c45647', roofColor: '#c86442', weathering: 0.7, hasAwning: true, hasVines: true, hasRooftopProps: true }
+  },
+  market_shop: {
+    label: 'سوق خضار وفواكه',
+    subtitle: 'تندة خضراء + روف أخضر',
+    config: { width: 9.5, depth: 7.0, floors: 2, floorHeight: 3.0, roofType: 'flat', wallColor: '#e8bc66', trimColor: '#f9eed5', shutterColor: '#3a7a54', awningColor: '#2f855a', roofColor: '#c86442', weathering: 0.55, hasAwning: true, hasVines: true, hasRooftopProps: true }
   },
   med_villa: {
     label: 'بيت قرميد متوسطي',
-    subtitle: 'سقف قرميد هرمي دافئ',
-    config: { width: 9.0, depth: 7.5, floors: 2, floorHeight: 3.0, roofType: 'hipped', wallColor: '#f0dec6', trimColor: '#faf3e8', shutterColor: '#4d7a57', awningColor: '#c45647', roofColor: '#cc613d', weathering: 0.45 }
+    subtitle: 'سقف قرميد + جهنمية',
+    config: { width: 9.0, depth: 7.5, floors: 2, floorHeight: 3.0, roofType: 'hipped', wallColor: '#f0dec6', trimColor: '#faf3e8', shutterColor: '#4d7a57', awningColor: '#c45647', roofColor: '#cc613d', weathering: 0.45, hasAwning: false, hasVines: true, hasRooftopProps: false }
   },
   town_hall: {
     label: 'مبنى البلدية',
     subtitle: 'واجهة عريضة + قرميد',
-    config: { width: 12.5, depth: 7.5, floors: 2, floorHeight: 3.3, roofType: 'gabled', wallColor: '#efe2ce', trimColor: '#faf5ec', shutterColor: '#6e523d', awningColor: '#9e2a2b', roofColor: '#c75d3b', weathering: 0.35 }
+    config: { width: 12.5, depth: 7.5, floors: 2, floorHeight: 3.3, roofType: 'gabled', wallColor: '#efe2ce', trimColor: '#faf5ec', shutterColor: '#6e523d', awningColor: '#9e2a2b', roofColor: '#c75d3b', weathering: 0.35, hasAwning: false, hasVines: false, hasRooftopProps: false }
+  },
+  workshop: {
+    label: 'ورشة ومخزن',
+    subtitle: 'مساحة واسعة + خزان',
+    config: { width: 11.0, depth: 8.0, floors: 1, floorHeight: 3.8, roofType: 'flat', wallColor: '#d8d2cb', trimColor: '#ece7e1', shutterColor: '#4b5563', awningColor: '#4a5568', roofColor: '#6b7280', weathering: 0.75, hasAwning: false, hasVines: false, hasRooftopProps: true }
   }
 };

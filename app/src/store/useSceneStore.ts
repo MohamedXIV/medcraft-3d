@@ -14,7 +14,7 @@ import type {
   WallCutMode,
   WallHeightPreset
 } from '../types/scene';
-import { BUILDING_PRESETS, type BuildingConfig } from '../procedural/prng';
+import { BUILDING_PRESETS, PALETTES, mulberry32, type BuildingConfig } from '../procedural/prng';
 
 export type EditorToolMode = 'select' | 'draw_wall' | 'paint_wall' | 'place_object';
 
@@ -58,6 +58,8 @@ interface EditorState {
   wallCutMode: WallCutMode;
   projection: 'perspective' | 'orthographic';
 
+  exportLayers: { structure: boolean; interior: boolean; environment: boolean };
+
   nodes: SceneNode[];
   walls: FreeformWall[];
 
@@ -75,6 +77,7 @@ interface EditorState {
   cancelPlacing: () => void;
   setWallDrawHeight: (h: WallHeightPreset) => void;
   setPaintColor: (hex: string) => void;
+  setExportLayer: (layer: 'structure' | 'interior' | 'environment', val: boolean) => void;
 
   selectNode: (id: string | null) => void;
   setTransformMode: (mode: TransformMode) => void;
@@ -85,6 +88,7 @@ interface EditorState {
 
   updateBuilding: (patch: Partial<BuildingConfig>) => void;
   applyPreset: (presetId: string) => void;
+  randomizeBuilding: () => void;
   spawnObject: (kind: ProceduralRecipe['kind']) => void;
   addNode: (node: SceneNode) => void;
   updateNodeTransform: (id: string, patch: Partial<Transform>) => void;
@@ -132,9 +136,15 @@ const DEFAULT_BUILDING: BuildingConfig = {
   shutterColor: '#2f7a57',
   awningColor: '#2a8058',
   roofColor: '#c86442',
+  flowerColor: '#e04882',
   weathering: 0.65,
   lighting: 'golden',
-  showSidewalk: true
+  showSidewalk: true,
+  hasAwning: true,
+  hasVines: true,
+  hasRooftopProps: true,
+  postFxEnabled: true,
+  bloomIntensity: 0.25
 };
 
 const INITIAL_NODES: SceneNode[] = [
@@ -161,6 +171,17 @@ const INITIAL_NODES: SceneNode[] = [
     booleanCutter: { enabled: true, boxSize: [1.15, 1.35, 0.75], boxOffset: [0, 0, 0], targets: ['walls'] }
   },
   {
+    id: 'win-2',
+    name: 'شباك علوي (Live Boolean)',
+    layer: 'structure',
+    floor: 1,
+    visible: true,
+    placementRule: 'wall',
+    transform: { position: [1.6, 4.75, -3.5], rotation: [0, Math.PI, 0], scale: [1, 1, 1] },
+    recipe: { kind: 'window_shuttered', seed: 106, params: { width: 1.15, height: 1.35 } },
+    booleanCutter: { enabled: true, boxSize: [1.15, 1.35, 0.75], boxOffset: [0, 0, 0], targets: ['walls'] }
+  },
+  {
     id: 'door-1',
     name: 'باب مدخل (Live Boolean)',
     layer: 'structure',
@@ -182,6 +203,16 @@ const INITIAL_NODES: SceneNode[] = [
     recipe: { kind: 'cafe_table', seed: 202, params: { chairs: 2 } }
   },
   {
+    id: 'bed-1',
+    name: 'سرير الدور العلوي',
+    layer: 'interior',
+    floor: 1,
+    visible: true,
+    placementRule: 'floor',
+    transform: { position: [2.2, 3.15, -0.8], rotation: [0, 0, 0], scale: [1, 1, 1] },
+    recipe: { kind: 'bed_mediterranean', seed: 208, params: {} }
+  },
+  {
     id: 'tree-1',
     name: 'شجرة زيتون',
     layer: 'environment',
@@ -190,6 +221,16 @@ const INITIAL_NODES: SceneNode[] = [
     placementRule: 'floor',
     transform: { position: [-5.8, 0, 4.1], rotation: [0, 0.6, 0], scale: [1, 1, 1] },
     recipe: { kind: 'olive_tree', seed: 303, params: { scale: 1.0 } }
+  },
+  {
+    id: 'bench-1',
+    name: 'مقعد خشبي',
+    layer: 'environment',
+    floor: 0,
+    visible: true,
+    placementRule: 'floor',
+    transform: { position: [5.5, 0, -0.4], rotation: [0, Math.PI / 2, 0], scale: [1, 1, 1] },
+    recipe: { kind: 'park_bench', seed: 305, params: {} }
   },
   {
     id: 'lamp-1',
@@ -232,6 +273,8 @@ export const useSceneStore = create<EditorState>()(
       activeFloor: 0,
       wallCutMode: 'cutaway',
       projection: 'perspective',
+      exportLayers: { structure: true, interior: true, environment: false },
+
       nodes: INITIAL_NODES,
       walls: buildPerimeterWalls(DEFAULT_BUILDING.width, DEFAULT_BUILDING.depth, DEFAULT_BUILDING.floors, DEFAULT_BUILDING.wallColor),
       selectedId: 'stair-1',
@@ -248,6 +291,7 @@ export const useSceneStore = create<EditorState>()(
       cancelPlacing: () => set({ toolMode: 'select', placingDraft: null }),
       setWallDrawHeight: (wallDrawHeight) => set({ wallDrawHeight }),
       setPaintColor: (paintColor) => set({ paintColor }),
+      setExportLayer: (layer, val) => set((s) => ({ exportLayers: { ...s.exportLayers, [layer]: val } })),
 
       selectNode: (id) => set({ selectedId: id }),
       setTransformMode: (transformMode) => set({ transformMode }),
@@ -263,13 +307,38 @@ export const useSceneStore = create<EditorState>()(
             patch.width !== undefined || patch.depth !== undefined || patch.floors !== undefined || patch.wallColor !== undefined
               ? buildPerimeterWalls(next.width, next.depth, next.floors, next.wallColor)
               : s.walls;
-          return { building: next, walls };
+          const activeFloor = Math.min(s.activeFloor, next.floors - 1);
+          return { building: next, walls, activeFloor };
         }),
 
       applyPreset: (presetId) => {
         const p = BUILDING_PRESETS[presetId];
         if (!p) return;
         get().updateBuilding(p.config);
+      },
+
+      randomizeBuilding: () => {
+        const seed = Math.floor(1000 + Math.random() * 98000);
+        const r = mulberry32(seed);
+        const pal = PALETTES[Math.floor(r() * PALETTES.length)];
+        const roofs: BuildingConfig['roofType'][] = ['flat', 'flat', 'hipped', 'gabled'];
+        get().updateBuilding({
+          seed,
+          width: Math.round((7 + r() * 5.5) * 2) / 2,
+          depth: Math.round((6 + r() * 3.5) * 2) / 2,
+          floors: Math.floor(1 + r() * 2.8),
+          roofType: roofs[Math.floor(r() * roofs.length)],
+          wallColor: pal.wall,
+          trimColor: pal.trim,
+          shutterColor: pal.shutter,
+          awningColor: pal.awning,
+          roofColor: pal.roof,
+          flowerColor: pal.flower,
+          weathering: Math.round((0.35 + r() * 0.45) * 10) / 10,
+          hasAwning: r() > 0.3,
+          hasVines: r() > 0.4,
+          hasRooftopProps: r() > 0.25
+        });
       },
 
       spawnObject: (kind) => get().startPlacing(makeDefaultDraft(kind)),
@@ -284,23 +353,14 @@ export const useSceneStore = create<EditorState>()(
         set((s) => ({
           nodes: s.nodes.map((n) => {
             if (n.id !== id) return n;
-            const current = n.booleanCutter ?? {
-              enabled: false,
-              boxSize: [1.4, 2.2, 1.4],
-              boxOffset: [0, 1.1, 0],
-              targets: ['walls', 'slabs']
-            };
+            const current = n.booleanCutter ?? { enabled: false, boxSize: [1.4, 2.2, 1.4], boxOffset: [0, 1.1, 0], targets: ['walls', 'slabs'] };
             return { ...n, booleanCutter: { ...current, enabled: !current.enabled } };
           })
         })),
 
       updateBooleanCutterBox: (id, boxSize) =>
         set((s) => ({
-          nodes: s.nodes.map((n) =>
-            n.id === id && n.booleanCutter
-              ? { ...n, booleanCutter: { ...n.booleanCutter, boxSize } }
-              : n
-          )
+          nodes: s.nodes.map((n) => (n.id === id && n.booleanCutter ? { ...n, booleanCutter: { ...n.booleanCutter, boxSize } } : n))
         })),
 
       duplicateSelected: () => {

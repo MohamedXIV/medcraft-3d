@@ -19,8 +19,7 @@ export function createStuccoTexture(baseHex: string, weathering: number, seed: n
 
   const size = 256;
   const c = document.createElement('canvas');
-  c.width = size;
-  c.height = size;
+  c.width = size; c.height = size;
   const ctx = c.getContext('2d')!;
   const rng = mulberry32(seed + 101);
   const rgb = hexToRgb(baseHex);
@@ -30,9 +29,7 @@ export function createStuccoTexture(baseHex: string, weathering: number, seed: n
 
   const blotches = Math.floor(35 + weathering * 70);
   for (let i = 0; i < blotches; i++) {
-    const x = rng() * size;
-    const y = rng() * size;
-    const r = 12 + rng() * 44;
+    const x = rng() * size, y = rng() * size, r = 12 + rng() * 44;
     const delta = (rng() - 0.5) * 32 * (0.4 + weathering);
     const grad = ctx.createRadialGradient(x, y, 1, x, y, r);
     const nr = Math.max(0, Math.min(255, Math.round(rgb.r + delta)));
@@ -41,9 +38,7 @@ export function createStuccoTexture(baseHex: string, weathering: number, seed: n
     grad.addColorStop(0, `rgba(${nr},${ng},${nb},${0.16 + weathering * 0.14})`);
     grad.addColorStop(1, `rgba(${nr},${ng},${nb},0)`);
     ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
   }
 
   for (let i = 0; i < 2000; i++) {
@@ -52,10 +47,8 @@ export function createStuccoTexture(baseHex: string, weathering: number, seed: n
   }
 
   const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(2, 1);
-  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2, 1); tex.colorSpace = THREE.SRGBColorSpace;
   cache.set(key, tex);
   return tex;
 }
@@ -67,8 +60,7 @@ export function createTerracottaTexture(baseHex: string, seed: number): THREE.Ca
 
   const size = 256;
   const c = document.createElement('canvas');
-  c.width = size;
-  c.height = size;
+  c.width = size; c.height = size;
   const ctx = c.getContext('2d')!;
   const rng = mulberry32(seed + 303);
   const rgb = hexToRgb(baseHex);
@@ -87,18 +79,58 @@ export function createTerracottaTexture(baseHex: string, seed: number): THREE.Ca
       g.addColorStop(0, `rgb(${Math.max(0, cr - 32)},${Math.max(0, cg - 26)},${Math.max(0, cb - 22)})`);
       g.addColorStop(0.45, `rgb(${Math.min(255, cr + 24)},${Math.min(255, cg + 18)},${Math.min(255, cb + 12)})`);
       g.addColorStop(1, `rgb(${Math.max(0, cr - 38)},${Math.max(0, cg - 30)},${Math.max(0, cb - 25)})`);
-      ctx.fillStyle = g;
-      ctx.fillRect(x, y, cw, rh);
-      ctx.fillStyle = 'rgba(45, 20, 10, 0.32)';
-      ctx.fillRect(x, y + rh - 3, cw, 3);
+      ctx.fillStyle = g; ctx.fillRect(x, y, cw, rh);
+      ctx.fillStyle = 'rgba(45, 20, 10, 0.32)'; ctx.fillRect(x, y + rh - 3, cw, 3);
     }
   }
 
   const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(3, 2);
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(3, 2); tex.colorSpace = THREE.SRGBColorSpace;
+  cache.set(key, tex);
+  return tex;
+}
+
+export function createAwningTexture(stripeHex: string): THREE.CanvasTexture {
+  const key = `awning_${stripeHex}`;
+  const existing = cache.get(key);
+  if (existing) return existing;
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 128;
+  const ctx = c.getContext('2d')!;
+  const stripes = 12, sw = c.width / stripes;
+  for (let i = 0; i < stripes; i++) {
+    ctx.fillStyle = i % 2 === 0 ? stripeHex : '#f7efe3';
+    ctx.fillRect(i * sw, 0, sw + 0.5, c.height);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;
+  cache.set(key, tex);
+  return tex;
+}
+
+export function createSidewalkTexture(): THREE.CanvasTexture {
+  const key = 'sidewalk_v3';
+  const existing = cache.get(key);
+  if (existing) return existing;
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const ctx = c.getContext('2d')!;
+  const rng = mulberry32(777);
+  ctx.fillStyle = '#c9b8a7'; ctx.fillRect(0, 0, size, size);
+  const grid = 8, step = size / grid;
+  for (let y = 0; y < grid; y++) {
+    for (let x = 0; x < grid; x++) {
+      const d = (rng() - 0.5) * 18;
+      ctx.fillStyle = `rgb(${Math.round(205 + d)},${Math.round(188 + d)},${Math.round(172 + d)})`;
+      ctx.fillRect(x * step + 1.5, y * step + 1.5, step - 3, step - 3);
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 4); tex.colorSpace = THREE.SRGBColorSpace;
   cache.set(key, tex);
   return tex;
 }
@@ -110,45 +142,35 @@ export function createFloorTexture(style: 'wood' | 'checker' | 'terracotta'): TH
 
   const size = 256;
   const c = document.createElement('canvas');
-  c.width = size;
-  c.height = size;
+  c.width = size; c.height = size;
   const ctx = c.getContext('2d')!;
 
   if (style === 'checker') {
     const step = size / 8;
-    for (let y = 0; y < 8; y++) {
-      for (let x = 0; x < 8; x++) {
-        ctx.fillStyle = (x + y) % 2 === 0 ? '#efe7dc' : '#cfc2b0';
-        ctx.fillRect(x * step, y * step, step, step);
-      }
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+      ctx.fillStyle = (x + y) % 2 === 0 ? '#efe7dc' : '#cfc2b0';
+      ctx.fillRect(x * step, y * step, step, step);
     }
   } else if (style === 'terracotta') {
-    ctx.fillStyle = '#b97754';
-    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#b97754'; ctx.fillRect(0, 0, size, size);
     const step = size / 6;
-    for (let y = 0; y < 6; y++) {
-      for (let x = 0; x < 6; x++) {
-        ctx.fillStyle = (x + y) % 2 === 0 ? '#c87f5a' : '#bd734e';
-        ctx.fillRect(x * step + 2, y * step + 2, step - 4, step - 4);
-      }
+    for (let y = 0; y < 6; y++) for (let x = 0; x < 6; x++) {
+      ctx.fillStyle = (x + y) % 2 === 0 ? '#c87f5a' : '#bd734e';
+      ctx.fillRect(x * step + 2, y * step + 2, step - 4, step - 4);
     }
   } else {
-    ctx.fillStyle = '#a6764c';
-    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#a6764c'; ctx.fillRect(0, 0, size, size);
     const rows = 8, rh = size / rows;
     for (let r = 0; r < rows; r++) {
       ctx.fillStyle = r % 2 === 0 ? '#b28258' : '#a3734a';
       ctx.fillRect(0, r * rh + 1, size, rh - 2);
-      ctx.fillStyle = 'rgba(60,35,15,0.22)';
-      ctx.fillRect(0, r * rh, size, 1.5);
+      ctx.fillStyle = 'rgba(60,35,15,0.22)'; ctx.fillRect(0, r * rh, size, 1.5);
     }
   }
 
   const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(3, 3);
-  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(3, 3); tex.colorSpace = THREE.SRGBColorSpace;
   cache.set(key, tex);
   return tex;
 }
