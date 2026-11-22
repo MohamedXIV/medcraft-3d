@@ -1,18 +1,57 @@
 import { create } from 'zustand';
 import { temporal } from 'zundo';
 import type {
+  BooleanCutterConfig,
   FreeformWall,
+  PlacementRule,
   ProceduralRecipe,
   SceneDocument,
   SceneNode,
+  StudioAssetItem,
   Transform,
   TransformMode,
   Vec3,
-  WallCutMode
+  WallCutMode,
+  WallHeightPreset
 } from '../types/scene';
 import { BUILDING_PRESETS, type BuildingConfig } from '../procedural/prng';
 
+export type EditorToolMode = 'select' | 'draw_wall' | 'paint_wall' | 'place_object';
+
+export interface PlacingDraft {
+  name: string;
+  recipe: ProceduralRecipe;
+  placementRule: PlacementRule;
+  booleanCutter?: BooleanCutterConfig;
+}
+
+const LS_LIBRARY_KEY = 'medcraft_v3_asset_library';
+const LS_SCENES_KEY = 'medcraft_v3_saved_scenes';
+
+function safeReadLS<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function safeWriteLS(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
 interface EditorState {
+  appMode: 'scene' | 'studio';
+  toolMode: EditorToolMode;
+  placingDraft: PlacingDraft | null;
+  wallDrawHeight: WallHeightPreset;
+  paintColor: string;
+
   sceneName: string;
   building: BuildingConfig;
   activeFloor: number;
@@ -27,7 +66,19 @@ interface EditorState {
   snapToGrid: boolean;
   gridSize: number;
 
-  // Actions
+  // Persistent Personal Library & Saved Scenes
+  assetLibrary: StudioAssetItem[];
+  savedScenes: SceneDocument[];
+
+  // Mode & Tool Actions
+  setAppMode: (mode: 'scene' | 'studio') => void;
+  setToolMode: (mode: EditorToolMode) => void;
+  startPlacing: (draft: PlacingDraft) => void;
+  cancelPlacing: () => void;
+  setWallDrawHeight: (h: WallHeightPreset) => void;
+  setPaintColor: (hex: string) => void;
+
+  // Selection & Camera Actions
   selectNode: (id: string | null) => void;
   setTransformMode: (mode: TransformMode) => void;
   toggleSnap: () => void;
@@ -35,9 +86,9 @@ interface EditorState {
   setWallCutMode: (mode: WallCutMode) => void;
   setProjection: (proj: 'perspective' | 'orthographic') => void;
 
+  // Building & Scene Actions
   updateBuilding: (patch: Partial<BuildingConfig>) => void;
   applyPreset: (presetId: string) => void;
-
   spawnObject: (kind: ProceduralRecipe['kind']) => void;
   addNode: (node: SceneNode) => void;
   updateNodeTransform: (id: string, patch: Partial<Transform>) => void;
@@ -45,8 +96,18 @@ interface EditorState {
   updateBooleanCutterBox: (id: string, boxSize: Vec3) => void;
   duplicateSelected: () => void;
   deleteSelected: () => void;
-  addWall: (wall: FreeformWall) => void;
 
+  // Freeform Wall Actions
+  addWall: (wall: FreeformWall) => void;
+  paintWall: (wallId: string, color: string) => void;
+  deleteWall: (wallId: string) => void;
+
+  // Asset Library & Scene Persistence
+  saveAssetToLibrary: (item: StudioAssetItem) => void;
+  deleteAssetFromLibrary: (id: string) => void;
+  saveNamedScene: (name: string) => void;
+  loadNamedScene: (id: string) => void;
+  deleteNamedScene: (id: string) => void;
   exportSceneDocument: () => SceneDocument;
   loadSceneDocument: (doc: SceneDocument) => void;
 }
@@ -144,9 +205,30 @@ const INITIAL_NODES: SceneNode[] = [
   }
 ];
 
+export function makeDefaultDraft(kind: ProceduralRecipe['kind']): PlacingDraft {
+  const isWallOp = kind === 'window_shuttered' || kind === 'door_arched';
+  const isStair = kind === 'staircase';
+  return {
+    name: kind.replace('_', ' '),
+    placementRule: isWallOp ? 'wall' : 'floor',
+    recipe: { kind, seed: Math.floor(100 + Math.random() * 9000), params: {} },
+    ...(isWallOp
+      ? { booleanCutter: { enabled: true, boxSize: [1.2, kind === 'window_shuttered' ? 1.35 : 2.2, 0.75], boxOffset: [0, kind === 'window_shuttered' ? 0 : 1.1, 0], targets: ['walls'] } }
+      : isStair
+        ? { booleanCutter: { enabled: true, boxSize: [1.35, 3.5, 2.9], boxOffset: [0, 1.75, 1.35], targets: ['slabs'] } }
+        : {})
+  };
+}
+
 export const useSceneStore = create<EditorState>()(
   temporal(
     (set, get) => ({
+      appMode: 'scene',
+      toolMode: 'select',
+      placingDraft: null,
+      wallDrawHeight: 'full',
+      paintColor: '#de9a7c',
+
       sceneName: 'Mediterranean Studio v3',
       building: DEFAULT_BUILDING,
       activeFloor: 0,
@@ -158,6 +240,16 @@ export const useSceneStore = create<EditorState>()(
       transformMode: 'translate',
       snapToGrid: true,
       gridSize: 0.25,
+
+      assetLibrary: safeReadLS<StudioAssetItem[]>(LS_LIBRARY_KEY, []),
+      savedScenes: safeReadLS<SceneDocument[]>(LS_SCENES_KEY, []),
+
+      setAppMode: (appMode) => set({ appMode }),
+      setToolMode: (toolMode) => set({ toolMode, placingDraft: toolMode === 'place_object' ? get().placingDraft : null, selectedId: toolMode === 'select' ? get().selectedId : null }),
+      startPlacing: (draft) => set({ appMode: 'scene', toolMode: 'place_object', placingDraft: draft, selectedId: null }),
+      cancelPlacing: () => set({ toolMode: 'select', placingDraft: null }),
+      setWallDrawHeight: (wallDrawHeight) => set({ wallDrawHeight }),
+      setPaintColor: (paintColor) => set({ paintColor }),
 
       selectNode: (id) => set({ selectedId: id }),
       setTransformMode: (transformMode) => set({ transformMode }),
@@ -183,30 +275,8 @@ export const useSceneStore = create<EditorState>()(
       },
 
       spawnObject: (kind) => {
-        const id = `${kind}-${Date.now()}`;
-        const isWallOp = kind === 'window_shuttered' || kind === 'door_arched';
-        const isStair = kind === 'staircase';
-        const isEnv = kind === 'olive_tree' || kind === 'street_lamp' || kind === 'park_bench';
-        const node: SceneNode = {
-          id,
-          name: kind.replace('_', ' '),
-          layer: isWallOp || isStair || kind === 'water_tank' ? 'structure' : isEnv ? 'environment' : 'interior',
-          floor: get().activeFloor,
-          visible: true,
-          placementRule: isWallOp ? 'wall' : 'floor',
-          transform: {
-            position: isEnv ? [5.4, 0, 1.5] : isWallOp ? [0, kind === 'window_shuttered' ? 1.65 : 0, -get().building.depth / 2] : [0, 0, 0],
-            rotation: [0, 0, 0],
-            scale: [1, 1, 1]
-          },
-          recipe: { kind, seed: Math.floor(100 + Math.random() * 9000), params: {} },
-          ...(isWallOp
-            ? { booleanCutter: { enabled: true, boxSize: [1.2, kind === 'window_shuttered' ? 1.35 : 2.2, 0.75], boxOffset: [0, kind === 'window_shuttered' ? 0 : 1.1, 0], targets: ['walls'] } }
-            : isStair
-              ? { booleanCutter: { enabled: true, boxSize: [1.35, 3.5, 2.9], boxOffset: [0, 1.75, 1.35], targets: ['slabs'] } }
-              : {})
-        };
-        set((s) => ({ nodes: [...s.nodes, node], selectedId: id }));
+        // Enter Surface-Aware Smart Placement Mode so user places it directly onto any floor/wall/table!
+        get().startPlacing(makeDefaultDraft(kind));
       },
 
       addNode: (node) => set((s) => ({ nodes: [...s.nodes, node], selectedId: node.id })),
@@ -260,6 +330,49 @@ export const useSceneStore = create<EditorState>()(
 
       addWall: (wall) => set((s) => ({ walls: [...s.walls, wall] })),
 
+      paintWall: (wallId, color) =>
+        set((s) => ({
+          walls: s.walls.map((w) => (w.id === wallId ? { ...w, exteriorColor: color } : w))
+        })),
+
+      deleteWall: (wallId) => set((s) => ({ walls: s.walls.filter((w) => w.id !== wallId) })),
+
+      saveAssetToLibrary: (item) =>
+        set((s) => {
+          const next = [item, ...s.assetLibrary];
+          safeWriteLS(LS_LIBRARY_KEY, next);
+          return { assetLibrary: next };
+        }),
+
+      deleteAssetFromLibrary: (id) =>
+        set((s) => {
+          const next = s.assetLibrary.filter((a) => a.id !== id);
+          safeWriteLS(LS_LIBRARY_KEY, next);
+          return { assetLibrary: next };
+        }),
+
+      saveNamedScene: (name) => {
+        const doc = get().exportSceneDocument();
+        doc.name = name.trim() || `مشهد ${new Date().toLocaleTimeString('ar-EG')}`;
+        set((s) => {
+          const next = [doc, ...s.savedScenes.filter((x) => x.id !== doc.id)];
+          safeWriteLS(LS_SCENES_KEY, next);
+          return { savedScenes: next, sceneName: doc.name };
+        });
+      },
+
+      loadNamedScene: (id) => {
+        const found = get().savedScenes.find((x) => x.id === id);
+        if (found) get().loadSceneDocument(found);
+      },
+
+      deleteNamedScene: (id) =>
+        set((s) => {
+          const next = s.savedScenes.filter((x) => x.id !== id);
+          safeWriteLS(LS_SCENES_KEY, next);
+          return { savedScenes: next };
+        }),
+
       exportSceneDocument: () => {
         const s = get();
         return {
@@ -280,7 +393,9 @@ export const useSceneStore = create<EditorState>()(
           building: { ...s.building, floors: doc.floors, floorHeight: doc.floorHeight },
           walls: doc.walls,
           nodes: doc.nodes,
-          selectedId: null
+          selectedId: null,
+          toolMode: 'select',
+          placingDraft: null
         }))
     }),
     {
