@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MedCraft 3D — مولّد المباني المتوسطية التفاعلي</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="relative w-screen h-screen overflow-hidden">
+
+  <!-- 3D Canvas Container -->
+  <div id="canvas-wrap" class="absolute inset-0 w-full h-full">
+    <canvas id="viewport"></canvas>
+  </div>
+
+  <!-- Top-Left Floating Header & Stats HUD -->
+  <div class="fixed top-3 left-3 z-20 flex flex-wrap items-center gap-2 pointer-events-none max-w-[calc(100vw-80px)]">
+    <div class="glass-panel pointer-events-auto rounded-2xl px-3.5 py-2 flex items-center gap-2.5 shadow-xl">
+      <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-[#e07a5f] to-[#c45a3f] flex items-center justify-center shadow-md">
+        <i data-lucide="building-2" class="w-4 h-4 text-white"></i>
+      </div>
+      <div class="leading-tight">
+        <div class="text-sm font-extrabold tracking-tight text-[#fff5eb]">MedCraft 3D</div>
+        <div class="text-[11px] text-[#cbb8a8]">مولّد المباني والتصميم الداخلي</div>
+      </div>
+    </div>
+
+    <div class="glass-panel pointer-events-auto hidden sm:flex items-center gap-3 rounded-2xl px-3.5 py-2 text-[11px] text-[#dfd0c2] shadow-lg font-mono-num" dir="ltr">
+      <span class="flex items-center gap-1" title="Triangles"><i data-lucide="triangle" class="w-3.5 h-3.5 text-[#e07a5f]"></i><b id="stat-tris">0</b></span>
+      <span class="opacity-30">|</span>
+      <span class="flex items-center gap-1" title="Meshes"><i data-lucide="boxes" class="w-3.5 h-3.5 text-[#81b29a]"></i><b id="stat-meshes">0</b></span>
+      <span class="opacity-30">|</span>
+      <span class="flex items-center gap-1" title="Dimensions"><i data-lucide="ruler" class="w-3.5 h-3.5 text-[#f2cc8f]"></i><b id="stat-dims">0×0×0m</b></span>
+    </div>
+  </div>
+
+  <!-- Mobile / Panel Toggle Button (Top-Right) -->
+  <button id="btn-toggle-panel" class="fixed top-3 right-3 z-30 glass-panel rounded-xl p-2.5 text-[#fff5eb] hover:bg-[#e07a5f]/30 transition shadow-xl flex items-center gap-1.5" title="إظهار / إخفاء لوحة التحكم">
+    <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+    <span class="text-xs font-bold hidden sm:inline" id="toggle-panel-label">إخفاء التحكم</span>
+  </button>
+
+  <!-- Right Inspector Sidebar -->
+  <aside id="inspector-panel" class="fixed top-14 right-3 bottom-16 sm:bottom-3 z-20 w-[min(350px,calc(100vw-24px))] glass-panel rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-transform duration-300">
+    
+    <!-- Quick Seed & Randomize Bar -->
+    <div class="p-3 border-b border-white/10 flex items-center gap-2 bg-black/20">
+      <button id="btn-randomize" class="flex-1 bg-gradient-to-r from-[#e07a5f] to-[#d46346] hover:from-[#eb886d] hover:to-[#e07154] text-white font-bold text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition">
+        <i data-lucide="dices" class="w-4 h-4"></i>
+        <span>توليد عشوائي ذكي</span>
+      </button>
+      <div class="flex items-center bg-white/5 border border-white/10 rounded-xl px-2 py-1.5 gap-1" dir="ltr">
+        <span class="text-[10px] text-[#b9a594] font-semibold">SEED</span>
+        <input id="input-seed" type="number" value="4027" min="1" max="999999" class="w-16 bg-transparent text-xs font-mono-num text-[#fff5eb] font-bold focus:outline-none text-center" />
+      </div>
+    </div>
+
+    <!-- Inspector Tabs -->
+    <div class="grid grid-cols-4 gap-1 p-2 border-b border-white/10 bg-black/15">
+      <button class="tab-btn active text-[11px] font-bold py-1.5 px-1 rounded-lg border border-transparent flex flex-col items-center gap-0.5 transition" data-tab="base">
+        <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+        <span>الأساس</span>
+      </button>
+      <button class="tab-btn text-[11px] font-bold py-1.5 px-1 rounded-lg border border-transparent text-[#c8b8a8] hover:text-white flex flex-col items-center gap-0.5 transition" data-tab="facade">
+        <i data-lucide="store" class="w-3.5 h-3.5"></i>
+        <span>الواجهة</span>
+      </button>
+      <button class="tab-btn text-[11px] font-bold py-1.5 px-1 rounded-lg border border-transparent text-[#c8b8a8] hover:text-white flex flex-col items-center gap-0.5 transition" data-tab="roof">
+        <i data-lucide="home" class="w-3.5 h-3.5"></i>
+        <span>السطح</span>
+      </button>
+      <button class="tab-btn text-[11px] font-bold py-1.5 px-1 rounded-lg border border-transparent text-[#c8b8a8] hover:text-white flex flex-col items-center gap-0.5 transition" data-tab="style">
+        <i data-lucide="palette" class="w-3.5 h-3.5"></i>
+        <span>الألوان</span>
+      </button>
+    </div>
+
+    <!-- Tab Panels Container -->
+    <div class="flex-1 overflow-y-auto custom-scroll p-3.5 space-y-4">
+
+      <!-- TAB 1: BASE & PRESETS -->
+      <div id="tab-base" class="tab-content space-y-4">
+        <div>
+          <div class="text-xs font-bold text-[#f2cc8f] mb-2 flex items-center gap-1.5">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            <span>قوالب جاهزة (مفروشة من الداخل)</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2" id="preset-grid">
+            <button class="preset-card active text-right p-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition" data-preset="corner_pharmacy">
+              <div class="text-xs font-bold text-white">ناصية وصيدلية</div>
+              <div class="text-[10px] text-[#bcaaa0]">أرفف دواء + شقة علوية</div>
+            </button>
+            <button class="preset-card text-right p-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition" data-preset="cafe_townhouse">
+              <div class="text-xs font-bold text-white">كافيه وسكني</div>
+              <div class="text-[10px] text-[#bcaaa0]">بار إسبريسو + طاولات</div>
+            </button>
+            <button class="preset-card text-right p-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition" data-preset="market_shop">
+              <div class="text-xs font-bold text-white">سوق خضار وفواكه</div>
+              <div class="text-[10px] text-[#bcaaa0]">كاشير + صناديق فاكهة</div>
+            </button>
+            <button class="preset-card text-right p-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition" data-preset="med_villa">
+              <div class="text-xs font-bold text-white">بيت قرميد متوسطي</div>
+              <div class="text-[10px] text-[#bcaaa0]">صالة معيشة + غرفة نوم</div>
+            </button>
+            <button class="preset-card text-right p-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition" data-preset="town_hall">
+              <div class="text-xs font-bold text-white">مبنى البلدية</div>
+              <div class="text-[10px] text-[#bcaaa0]">بهو رخام + برج ساعة</div>
+            </button>
+            <button class="preset-card text-right p-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition" data-preset="workshop">
+              <div class="text-xs font-bold text-white">ورشة ومخزن</div>
+              <div class="text-[10px] text-[#bcaaa0]">طاولات عمل + مخازن</div>
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-3 pt-2 border-t border-white/10">
+          <div class="text-xs font-bold text-[#f2cc8f]">أبعاد الكتلة (Dimensions)</div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-[#d6c6b8]">عدد الأدوار (Floors)</span>
+              <span class="font-mono-num font-bold text-[#ffbfa8]" id="val-floors">2</span>
+            </div>
+            <input type="range" id="ctrl-floors" min="1" max="5" step="1" value="2" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-[#d6c6b8]">العرض (Width)</span>
+              <span class="font-mono-num font-bold text-[#ffbfa8]" id="val-width">9.0 m</span>
+            </div>
+            <input type="range" id="ctrl-width" min="5" max="15" step="0.5" value="9" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-[#d6c6b8]">العمق (Depth)</span>
+              <span class="font-mono-num font-bold text-[#ffbfa8]" id="val-depth">7.5 m</span>
+            </div>
+            <input type="range" id="ctrl-depth" min="4.5" max="12" step="0.5" value="7.5" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-[#d6c6b8]">ارتفاع الدور (Floor Height)</span>
+              <span class="font-mono-num font-bold text-[#ffbfa8]" id="val-floorH">3.1 m</span>
+            </div>
+            <input type="range" id="ctrl-floorH" min="2.5" max="4.0" step="0.1" value="3.1" />
+          </div>
+        </div>
+
+        <div class="space-y-2.5 pt-2 border-t border-white/10">
+          <div class="text-xs font-bold text-[#f2cc8f]">الهيكل والتصميم الداخلي</div>
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-xs font-semibold">تصميم داخلي مفروش (Interior)</div>
+              <div class="text-[10px] text-[#a99789]">جدران مجوفة + غرف وأثاث وسلالم</div>
+            </div>
+            <div class="toggle-pill on" id="toggle-interior" data-key="hasInterior"></div>
+          </div>
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-xs font-semibold">فتح باب المدخل (Open Door)</div>
+              <div class="text-[10px] text-[#a99789]">فتح الباب الرئيسي للدخول للمبنى</div>
+            </div>
+            <div class="toggle-pill on" id="toggle-doorOpen" data-key="doorOpen"></div>
+          </div>
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-xs font-semibold">شطف الناصية (Corner Chamfer)</div>
+              <div class="text-[10px] text-[#a99789]">مدخل ركني بزاوية 45° مثل الصيدلية</div>
+            </div>
+            <div class="toggle-pill on" id="toggle-chamfer" data-key="cornerChamfer"></div>
+          </div>
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-xs font-semibold">قاعدة الرصيف (Sidewalk Diorama)</div>
+              <div class="text-[10px] text-[#a99789]">بلاط رصيف + بردورة مخططة وأصص</div>
+            </div>
+            <div class="toggle-pill on" id="toggle-sidewalk" data-key="showSidewalk"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: FACADE & STOREFRONT -->
+      <div id="tab-facade" class="tab-content hidden space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-[#f2cc8f] mb-1.5">نوع الدور الأرضي (Ground Floor & Interior)</label>
+          <select id="ctrl-shopType" class="w-full bg-[#241f1c] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#e07a5f]">
+            <option value="pharmacy">صيدلية (أرفف دواء + كاونتر + علامة خضراء)</option>
+            <option value="cafe">كافيه ومخبز (بار إسبريسو + طاولات داخلية وخارجية)</option>
+            <option value="market">سوق فواكه وخضار (صناديق عرض + كاشير)</option>
+            <option value="office">مكتب / متجر (مكتب + مكتبة كتب + لوحة إعلانات)</option>
+            <option value="civic">عقود وأقواس بلدية (بهو رخام + سجاد أحمر)</option>
+            <option value="workshop">ورشة صناعية (طاولات عمل + أرفف بضائع)</option>
+            <option value="residential">مدخل سكني مقوس (غرفة معيشة + صوفا)</option>
+          </select>
+        </div>
+
+        <div class="space-y-2.5 pt-2 border-t border-white/10">
+          <div class="text-xs font-bold text-[#f2cc8f]">عناصر الواجهة والتفاصيل</div>
+
+          <div class="flex items-center justify-between">
+            <span class="text-xs">تندة قماش مخططة (Striped Awning)</span>
+            <div class="toggle-pill on" id="toggle-awning" data-key="hasAwning"></div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <span class="text-xs">شيش خشب للنوافذ (Wooden Shutters)</span>
+            <div class="toggle-pill on" id="toggle-shutters" data-key="hasShutters"></div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <span class="text-xs">صناديق ورد تحت النوافذ (Flower Boxes)</span>
+            <div class="toggle-pill on" id="toggle-flowerboxes" data-key="hasFlowerBoxes"></div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <span class="text-xs">بلكونات حديد مشغول (Balconies)</span>
+            <div class="toggle-pill on" id="toggle-balconies" data-key="hasBalconies"></div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <span class="text-xs">حبال غسيل (Laundry Lines)</span>
+            <div class="toggle-pill" id="toggle-laundry" data-key="hasLaundry"></div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <span class="text-xs">جهنمية ونباتات متسلقة (Bougainvillea)</span>
+            <div class="toggle-pill on" id="toggle-vines" data-key="hasVines"></div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <span class="text-xs">وحدات تكييف على الواجهة (Wall ACs)</span>
+            <div class="toggle-pill on" id="toggle-wallAC" data-key="hasWallAC"></div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <span class="text-xs">أصص زرع وفوانيس الشارع (Street Props)</span>
+            <div class="toggle-pill on" id="toggle-streetProps" data-key="hasStreetProps"></div>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-white/10">
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-[#d6c6b8]">كثافة النوافذ (Window Density)</span>
+            <span class="font-mono-num font-bold text-[#ffbfa8]" id="val-winDensity">100%</span>
+          </div>
+          <input type="range" id="ctrl-winDensity" min="0.5" max="1.4" step="0.1" value="1.0" />
+        </div>
+      </div>
+
+      <!-- TAB 3: ROOF & PROPS -->
+      <div id="tab-roof" class="tab-content hidden space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-[#f2cc8f] mb-1.5">نظام السطح (Roof Architecture)</label>
+          <select id="ctrl-roofType" class="w-full bg-[#241f1c] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#e07a5f]">
+            <option value="flat">سطح مستوي بسور قصير (Flat Mediterranean)</option>
+            <option value="hipped">قرميد هرمي مائل (Hipped Terracotta)</option>
+            <option value="gabled">قرميد جمالون (Gabled Terracotta)</option>
+            <option value="civic">سقف بلدية + برج ساعة (Civic Pediment)</option>
+            <option value="sawtooth">سقف منشاري صناعي (Sawtooth Skylights)</option>
+          </select>
+        </div>
+
+        <div class="space-y-2.5 pt-2 border-t border-white/10">
+          <div class="text-xs font-bold text-[#f2cc8f]">تجهيزات السطح (Rooftop Props)</div>
+
+          <div class="flex items-center justify-between">
+            <span class="text-xs">خزان مياه بحامل ومواسير (Water Tank)</span>
+            <div class="toggle-pill on" id="toggle-waterTank" data-key="hasWaterTank"></div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <span class="text-xs">طبق دش (Satellite Dish)</span>
+            <div class="toggle-pill on" id="toggle-dish" data-key="hasDish"></div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <span class="text-xs">وحدات تكييف علوية (Roof AC Units)</span>
+            <div class="toggle-pill on" id="toggle-roofAC" data-key="hasRoofAC"></div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <span class="text-xs">حديقة سطح / أصص زرع (Roof Garden)</span>
+            <div class="toggle-pill on" id="toggle-roofGarden" data-key="hasRoofGarden"></div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <span class="text-xs">غرفة سطح / مدخنة (Penthouse / Chimney)</span>
+            <div class="toggle-pill" id="toggle-chimney" data-key="hasChimney"></div>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-white/10">
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-[#d6c6b8]">ارتفاع السور / ميل القرميد</span>
+            <span class="font-mono-num font-bold text-[#ffbfa8]" id="val-roofHeight">1.0x</span>
+          </div>
+          <input type="range" id="ctrl-roofHeight" min="0.6" max="1.6" step="0.1" value="1.0" />
+        </div>
+      </div>
+
+      <!-- TAB 4: COLORS & LIGHTING -->
+      <div id="tab-style" class="tab-content hidden space-y-4">
+        <div>
+          <div class="text-xs font-bold text-[#f2cc8f] mb-2">لوحات ألوان متوسطية (Palettes)</div>
+          <div class="grid grid-cols-3 gap-1.5" id="palette-grid"></div>
+        </div>
+
+        <div class="space-y-2.5 pt-2 border-t border-white/10">
+          <div class="text-xs font-bold text-[#f2cc8f]">تخصيص الألوان</div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <label class="flex items-center justify-between bg-white/5 px-2.5 py-1.5 rounded-xl border border-white/10">
+              <span class="text-[11px]">الجدار</span>
+              <input type="color" id="color-wall" value="#e8d6c0" />
+            </label>
+            <label class="flex items-center justify-between bg-white/5 px-2.5 py-1.5 rounded-xl border border-white/10">
+              <span class="text-[11px]">الإطارات</span>
+              <input type="color" id="color-trim" value="#f5eadc" />
+            </label>
+            <label class="flex items-center justify-between bg-white/5 px-2.5 py-1.5 rounded-xl border border-white/10">
+              <span class="text-[11px]">الشيش</span>
+              <input type="color" id="color-shutter" value="#3d7a5a" />
+            </label>
+            <label class="flex items-center justify-between bg-white/5 px-2.5 py-1.5 rounded-xl border border-white/10">
+              <span class="text-[11px]">التندة</span>
+              <input type="color" id="color-awning" value="#2f855a" />
+            </label>
+            <label class="flex items-center justify-between bg-white/5 px-2.5 py-1.5 rounded-xl border border-white/10">
+              <span class="text-[11px]">القرميد</span>
+              <input type="color" id="color-roof" value="#c86442" />
+            </label>
+            <label class="flex items-center justify-between bg-white/5 px-2.5 py-1.5 rounded-xl border border-white/10">
+              <span class="text-[11px]">الجهنمية</span>
+              <input type="color" id="color-flower" value="#d9468f" />
+            </label>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-white/10">
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-[#d6c6b8]">تقادم المحارة (Stucco Weathering)</span>
+            <span class="font-mono-num font-bold text-[#ffbfa8]" id="val-weathering">60%</span>
+          </div>
+          <input type="range" id="ctrl-weathering" min="0" max="1" step="0.1" value="0.6" />
+        </div>
+
+        <div class="pt-2 border-t border-white/10 space-y-2">
+          <div class="text-xs font-bold text-[#f2cc8f]">الإضاءة والوقت (Atmosphere)</div>
+          <div class="grid grid-cols-2 gap-1.5" id="lighting-grid">
+            <button class="light-btn active text-xs py-1.5 px-2 rounded-xl border border-[#e07a5f] bg-[#e07a5f]/20 text-white font-semibold" data-light="golden">☀️ الساعة الذهبية</button>
+            <button class="light-btn text-xs py-1.5 px-2 rounded-xl border border-white/10 bg-white/5 text-[#d6c6b8] hover:bg-white/10" data-light="noon">🌤️ ظهيرة مشمسة</button>
+            <button class="light-btn text-xs py-1.5 px-2 rounded-xl border border-white/10 bg-white/5 text-[#d6c6b8] hover:bg-white/10" data-light="sunset">🌇 غروب دافئ</button>
+            <button class="light-btn text-xs py-1.5 px-2 rounded-xl border border-white/10 bg-white/5 text-[#d6c6b8] hover:bg-white/10" data-light="night">🌙 ليل دافئ</button>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-white/10 flex items-center justify-between">
+          <span class="text-xs">وضع الشبكة الهندسية (Wireframe)</span>
+          <div class="toggle-pill" id="toggle-wireframe" data-key="wireframe"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Export Footer inside Panel -->
+    <div class="p-3 border-t border-white/10 bg-black/30 flex items-center gap-1.5">
+      <button id="btn-export-glb" class="flex-1 bg-[#81b29a] hover:bg-[#6fa088] text-[#111c16] font-extrabold text-xs py-2 px-2.5 rounded-xl flex items-center justify-center gap-1.5 shadow transition active:scale-95" title="تصدير مجسم ثلاثي الأبعاد كامل (خارجي + داخلي)">
+        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+        <span>تصدير GLB</span>
+      </button>
+      <button id="btn-export-png" class="bg-white/10 hover:bg-white/20 text-white font-bold text-xs py-2 px-2.5 rounded-xl flex items-center justify-center gap-1 transition" title="حفظ لقطة PNG">
+        <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+        <span>PNG</span>
+      </button>
+      <button id="btn-export-json" class="bg-white/10 hover:bg-white/20 text-white font-bold text-xs py-2 px-2.5 rounded-xl flex items-center justify-center gap-1 transition" title="نسخ إعدادات المبنى JSON">
+        <i data-lucide="braces" class="w-3.5 h-3.5"></i>
+        <span>JSON</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Floating Floor Slicer / Walk Controls HUD -->
+  <div id="interior-hud" class="fixed bottom-16 left-3 z-20 hidden flex-col gap-2">
+    <div class="glass-panel rounded-2xl p-1.5 flex items-center gap-1 shadow-xl">
+      <span class="text-[11px] font-bold text-[#f2cc8f] px-2 flex items-center gap-1">
+        <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+        <span id="floor-hud-label">الدور:</span>
+      </span>
+      <div id="floor-pills" class="flex items-center gap-1"></div>
+    </div>
+
+    <div id="walk-controls" class="hidden glass-panel rounded-2xl p-2.5 shadow-xl flex items-center gap-3">
+      <div class="grid grid-cols-3 gap-1 w-24" dir="ltr">
+        <div></div>
+        <button class="walk-key bg-white/10 hover:bg-[#e07a5f]/40 active:bg-[#e07a5f] rounded-lg p-1.5 flex justify-center" data-dir="fwd"><i data-lucide="arrow-up" class="w-3.5 h-3.5"></i></button>
+        <div></div>
+        <button class="walk-key bg-white/10 hover:bg-[#e07a5f]/40 active:bg-[#e07a5f] rounded-lg p-1.5 flex justify-center" data-dir="left"><i data-lucide="arrow-left" class="w-3.5 h-3.5"></i></button>
+        <button class="walk-key bg-white/10 hover:bg-[#e07a5f]/40 active:bg-[#e07a5f] rounded-lg p-1.5 flex justify-center" data-dir="back"><i data-lucide="arrow-down" class="w-3.5 h-3.5"></i></button>
+        <button class="walk-key bg-white/10 hover:bg-[#e07a5f]/40 active:bg-[#e07a5f] rounded-lg p-1.5 flex justify-center" data-dir="right"><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></button>
+      </div>
+      <div class="text-[11px] text-[#e6d7c8] leading-snug max-w-[165px]">
+        <div class="font-bold text-[#81b29a] mb-0.5">وضع التجوّل بالداخل</div>
+        استخدم <b class="font-mono-num text-white">WASD</b> أو الأسهم للمشي واسحب بالماوس للالتفات.
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom-Left Camera & Interior Mode Toolbar -->
+  <div class="fixed bottom-3 left-3 z-20 glass-panel rounded-2xl p-1.5 flex flex-wrap items-center gap-1 shadow-xl max-w-[calc(100vw-24px)]">
+    <button class="view-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-[#81b29a]/25 text-[#b7ebd0] hover:bg-[#81b29a]/40 transition flex items-center gap-1" data-view="exterior" title="عرض خارجي كامل">
+      <i data-lucide="eye" class="w-3.5 h-3.5"></i><span>خارجي</span>
+    </button>
+    <button class="view-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-[#d6c6b8] hover:bg-white/10 transition flex items-center gap-1" data-view="cutaway" title="مقطع عرضي لكشف الغرف والأثاث">
+      <i data-lucide="scissors" class="w-3.5 h-3.5"></i><span>مقطع داخلي</span>
+    </button>
+    <button class="view-btn px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-[#d6c6b8] hover:bg-white/10 transition flex items-center gap-1" data-view="walk" title="الدخول داخل المبنى والمشي فيه">
+      <i data-lucide="footprints" class="w-3.5 h-3.5"></i><span>ادخل المبنى</span>
+    </button>
+
+    <div class="w-px h-4 bg-white/15 mx-0.5"></div>
+
+    <button class="cam-btn px-2 py-1.5 rounded-xl text-[11px] font-bold bg-[#e07a5f]/25 text-[#ffbfa8] hover:bg-[#e07a5f]/40 transition" data-cam="iso" title="زاوية أيزومتريك">أيزومتريك</button>
+    <button class="cam-btn px-2 py-1.5 rounded-xl text-[11px] font-bold text-[#d6c6b8] hover:bg-white/10 transition" data-cam="street" title="زاوية الشارع المائلة">الشارع</button>
+    <button class="cam-btn px-2 py-1.5 rounded-xl text-[11px] font-bold text-[#d6c6b8] hover:bg-white/10 transition hidden sm:inline-block" data-cam="front" title="واجهة أمامية">أمامي</button>
+    <button class="cam-btn px-2 py-1.5 rounded-xl text-[11px] font-bold text-[#d6c6b8] hover:bg-white/10 transition hidden sm:inline-block" data-cam="top" title="منظور علوي">علوي</button>
+
+    <button id="btn-autorotate" class="p-1.5 rounded-xl text-[#d6c6b8] hover:bg-white/10 transition" title="دوران تلقائي">
+      <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+    </button>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 glass-panel px-4 py-2 rounded-full text-xs font-bold text-[#fff5eb] shadow-2xl opacity-0 pointer-events-none transition-all duration-300 flex items-center gap-2">
+    <i data-lucide="check-circle-2" class="w-4 h-4 text-[#81b29a]"></i>
+    <span id="toast-msg">تم التحديث</span>
+  </div>
+
+  <script src="js/state.js"></script>
+  <script src="js/textures.js"></script>
+  <script src="js/scene.js"></script>
+  <script src="js/generator.js"></script>
+  <script src="js/exporter.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>
