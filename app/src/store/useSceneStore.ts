@@ -66,11 +66,9 @@ interface EditorState {
   snapToGrid: boolean;
   gridSize: number;
 
-  // Persistent Personal Library & Saved Scenes
   assetLibrary: StudioAssetItem[];
   savedScenes: SceneDocument[];
 
-  // Mode & Tool Actions
   setAppMode: (mode: 'scene' | 'studio') => void;
   setToolMode: (mode: EditorToolMode) => void;
   startPlacing: (draft: PlacingDraft) => void;
@@ -78,7 +76,6 @@ interface EditorState {
   setWallDrawHeight: (h: WallHeightPreset) => void;
   setPaintColor: (hex: string) => void;
 
-  // Selection & Camera Actions
   selectNode: (id: string | null) => void;
   setTransformMode: (mode: TransformMode) => void;
   toggleSnap: () => void;
@@ -86,7 +83,6 @@ interface EditorState {
   setWallCutMode: (mode: WallCutMode) => void;
   setProjection: (proj: 'perspective' | 'orthographic') => void;
 
-  // Building & Scene Actions
   updateBuilding: (patch: Partial<BuildingConfig>) => void;
   applyPreset: (presetId: string) => void;
   spawnObject: (kind: ProceduralRecipe['kind']) => void;
@@ -97,12 +93,10 @@ interface EditorState {
   duplicateSelected: () => void;
   deleteSelected: () => void;
 
-  // Freeform Wall Actions
   addWall: (wall: FreeformWall) => void;
   paintWall: (wallId: string, color: string) => void;
   deleteWall: (wallId: string) => void;
 
-  // Asset Library & Scene Persistence
   saveAssetToLibrary: (item: StudioAssetItem) => void;
   deleteAssetFromLibrary: (id: string) => void;
   saveNamedScene: (name: string) => void;
@@ -112,14 +106,18 @@ interface EditorState {
   loadSceneDocument: (doc: SceneDocument) => void;
 }
 
-function buildPerimeterWalls(w: number, d: number, extColor: string): FreeformWall[] {
+function buildPerimeterWalls(w: number, d: number, floors: number, extColor: string): FreeformWall[] {
   const hw = w / 2, hd = d / 2;
-  return [
-    { id: 'w-back', floor: 0, start: [-hw, -hd], end: [hw, -hd], thickness: 0.26, heightPreset: 'full', exteriorColor: extColor, interiorColor: '#f4ebe0' },
-    { id: 'w-left', floor: 0, start: [-hw, -hd], end: [-hw, hd], thickness: 0.26, heightPreset: 'full', exteriorColor: extColor, interiorColor: '#f4ebe0' },
-    { id: 'w-right', floor: 0, start: [hw, -hd], end: [hw, hd], thickness: 0.26, heightPreset: 'full', exteriorColor: extColor, interiorColor: '#f4ebe0' },
-    { id: 'w-front', floor: 0, start: [-hw, hd], end: [hw, hd], thickness: 0.26, heightPreset: 'full', exteriorColor: extColor, interiorColor: '#f4ebe0' }
-  ];
+  const result: FreeformWall[] = [];
+  for (let f = 0; f < floors; f++) {
+    result.push(
+      { id: `w-f${f}-back`, floor: f, start: [-hw, -hd], end: [hw, -hd], thickness: 0.26, heightPreset: 'full', exteriorColor: extColor, interiorColor: '#f4ebe0' },
+      { id: `w-f${f}-left`, floor: f, start: [-hw, -hd], end: [-hw, hd], thickness: 0.26, heightPreset: 'full', exteriorColor: extColor, interiorColor: '#f4ebe0' },
+      { id: `w-f${f}-right`, floor: f, start: [hw, -hd], end: [hw, hd], thickness: 0.26, heightPreset: 'full', exteriorColor: extColor, interiorColor: '#f4ebe0' },
+      { id: `w-f${f}-front`, floor: f, start: [-hw, hd], end: [hw, hd], thickness: 0.26, heightPreset: 'full', exteriorColor: extColor, interiorColor: '#f4ebe0' }
+    );
+  }
+  return result;
 }
 
 const DEFAULT_BUILDING: BuildingConfig = {
@@ -235,7 +233,7 @@ export const useSceneStore = create<EditorState>()(
       wallCutMode: 'cutaway',
       projection: 'perspective',
       nodes: INITIAL_NODES,
-      walls: buildPerimeterWalls(DEFAULT_BUILDING.width, DEFAULT_BUILDING.depth, DEFAULT_BUILDING.wallColor),
+      walls: buildPerimeterWalls(DEFAULT_BUILDING.width, DEFAULT_BUILDING.depth, DEFAULT_BUILDING.floors, DEFAULT_BUILDING.wallColor),
       selectedId: 'stair-1',
       transformMode: 'translate',
       snapToGrid: true,
@@ -262,8 +260,8 @@ export const useSceneStore = create<EditorState>()(
         set((s) => {
           const next = { ...s.building, ...patch };
           const walls =
-            patch.width !== undefined || patch.depth !== undefined || patch.wallColor !== undefined
-              ? buildPerimeterWalls(next.width, next.depth, next.wallColor)
+            patch.width !== undefined || patch.depth !== undefined || patch.floors !== undefined || patch.wallColor !== undefined
+              ? buildPerimeterWalls(next.width, next.depth, next.floors, next.wallColor)
               : s.walls;
           return { building: next, walls };
         }),
@@ -274,11 +272,7 @@ export const useSceneStore = create<EditorState>()(
         get().updateBuilding(p.config);
       },
 
-      spawnObject: (kind) => {
-        // Enter Surface-Aware Smart Placement Mode so user places it directly onto any floor/wall/table!
-        get().startPlacing(makeDefaultDraft(kind));
-      },
-
+      spawnObject: (kind) => get().startPlacing(makeDefaultDraft(kind)),
       addNode: (node) => set((s) => ({ nodes: [...s.nodes, node], selectedId: node.id })),
 
       updateNodeTransform: (id, patch) =>
@@ -329,12 +323,7 @@ export const useSceneStore = create<EditorState>()(
       },
 
       addWall: (wall) => set((s) => ({ walls: [...s.walls, wall] })),
-
-      paintWall: (wallId, color) =>
-        set((s) => ({
-          walls: s.walls.map((w) => (w.id === wallId ? { ...w, exteriorColor: color } : w))
-        })),
-
+      paintWall: (wallId, color) => set((s) => ({ walls: s.walls.map((w) => (w.id === wallId ? { ...w, exteriorColor: color } : w)) })),
       deleteWall: (wallId) => set((s) => ({ walls: s.walls.filter((w) => w.id !== wallId) })),
 
       saveAssetToLibrary: (item) =>

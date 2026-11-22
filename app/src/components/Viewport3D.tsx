@@ -27,10 +27,11 @@ interface GhostPose {
   valid: boolean;
 }
 
-/** Upper floor slab with Live CSG Boolean Subtraction */
 function UpperFloorSlabCSG({ onSurfaceMove, onSurfaceClick }: { onSurfaceMove: (e: ThreeEvent<PointerEvent>, surface: 'floor') => void; onSurfaceClick: (e: ThreeEvent<MouseEvent>, surface: 'floor') => void }) {
   const nodes = useSceneStore((s) => s.nodes);
   const { width, depth, floorHeight, floors } = useSceneStore((s) => s.building);
+  const wallCutMode = useSceneStore((s) => s.wallCutMode);
+  const activeFloor = useSceneStore((s) => s.activeFloor);
   const floorTex = useMemo(() => createFloorTexture('wood'), []);
 
   const slabGeo = useMemo(() => {
@@ -58,6 +59,8 @@ function UpperFloorSlabCSG({ onSurfaceMove, onSurfaceClick }: { onSurfaceMove: (
   }, [nodes, width, depth, floorHeight]);
 
   if (floors < 2) return null;
+  if (wallCutMode !== 'up' && activeFloor === 0) return null;
+
   return (
     <mesh
       geometry={slabGeo}
@@ -71,11 +74,11 @@ function UpperFloorSlabCSG({ onSurfaceMove, onSurfaceClick }: { onSurfaceMove: (
   );
 }
 
-/** Wall mesh with Live CSG Boolean Subtraction + Click-to-Paint + Surface Placement */
 function WallCSGMesh({
   wall,
   floorHeight,
   cutMode,
+  activeFloor,
   weathering,
   seed,
   onSurfaceMove,
@@ -84,6 +87,7 @@ function WallCSGMesh({
   wall: FreeformWall;
   floorHeight: number;
   cutMode: string;
+  activeFloor: number;
   weathering: number;
   seed: number;
   onSurfaceMove: (e: ThreeEvent<PointerEvent>, surface: 'wall') => void;
@@ -98,16 +102,18 @@ function WallCSGMesh({
   const cx = (wall.start[0] + wall.end[0]) / 2;
   const cz = (wall.start[1] + wall.end[1]) / 2;
   const angle = -Math.atan2(dz, dx);
+  const baseY = wall.floor * floorHeight;
 
   let h = wall.heightPreset === 'full' ? floorHeight : wall.heightPreset === 'half' ? floorHeight * 0.5 : 1.0;
   const isFrontOrRight = cz > 2.0 || cx > 3.0;
-  if (cutMode === 'down' || (cutMode === 'cutaway' && isFrontOrRight)) {
+  const isTargetFloor = cutMode !== 'up' && wall.floor === activeFloor;
+  if (isTargetFloor && (cutMode === 'down' || (cutMode === 'cutaway' && isFrontOrRight))) {
     h = 0.36;
   }
 
   const wallGeo = useMemo(() => {
     const base = new Brush(new THREE.BoxGeometry(len, h, wall.thickness));
-    base.position.set(cx, h / 2, cz);
+    base.position.set(cx, baseY + h / 2, cz);
     base.rotation.set(0, angle, 0);
     base.updateMatrixWorld();
 
@@ -128,7 +134,9 @@ function WallCSGMesh({
       result = csgEvaluator.evaluate(result, sub, SUBTRACTION);
     }
     return result.geometry;
-  }, [nodes, len, h, wall.thickness, cx, cz, angle]);
+  }, [nodes, len, h, wall.thickness, cx, baseY, cz, angle]);
+
+  if (cutMode !== 'up' && wall.floor > activeFloor) return null;
 
   return (
     <mesh
@@ -221,7 +229,6 @@ function SelectableNode({ node, selected, onSelect, onDragState }: { node: Scene
   );
 }
 
-/** Live Preview Wall while drawing freeform Sims 4 walls */
 function WallDrawPreview({ start, end, height }: { start: [number, number]; end: [number, number]; height: number }) {
   const dx = end[0] - start[0];
   const dz = end[1] - start[1];
@@ -253,13 +260,10 @@ export function Viewport3D({ sceneRootRef }: { sceneRootRef: React.RefObject<THR
   const gfFloorTex = useMemo(() => createFloorTexture('checker'), []);
   const lp = LIGHTING_MAP[building.lighting];
 
-  // Surface-Aware Raycasting for Smart Placement & Freeform Wall Drawing
   const handleSurfaceMove = (e: ThreeEvent<PointerEvent>, surface: 'floor' | 'wall') => {
     if (toolMode === 'draw_wall' && surface === 'floor') {
       e.stopPropagation();
-      const x = snapVal(e.point.x, snapToGrid, 0.5);
-      const z = snapVal(e.point.z, snapToGrid, 0.5);
-      setWallCursor([x, z]);
+      setWallCursor([snapVal(e.point.x, snapToGrid, 0.5), snapVal(e.point.z, snapToGrid, 0.5)]);
       return;
     }
 
@@ -267,14 +271,12 @@ export function Viewport3D({ sceneRootRef }: { sceneRootRef: React.RefObject<THR
       e.stopPropagation();
       const isWallItem = placingDraft.placementRule === 'wall';
       const valid = isWallItem ? surface === 'wall' : surface === 'floor';
-
       const px = snapVal(e.point.x, snapToGrid, gridSize);
       const pz = snapVal(e.point.z, snapToGrid, gridSize);
       let py = Math.max(0, e.point.y);
       let ry = 0;
 
       if (isWallItem && surface === 'wall' && e.face) {
-        // Compute world normal of clicked wall face so window/door aligns flush automatically!
         const normalMatrix = new THREE.Matrix3().getNormalMatrix(e.object.matrixWorld);
         const worldNormal = e.face.normal.clone().applyMatrix3(normalMatrix).normalize();
         ry = Math.atan2(worldNormal.x, worldNormal.z);
@@ -365,40 +367,27 @@ export function Viewport3D({ sceneRootRef }: { sceneRootRef: React.RefObject<THR
       <directionalLight position={[14, 22, 15]} color={lp.sun} intensity={lp.sunInt} castShadow shadow-mapSize={[2048, 2048]} />
 
       <group ref={sceneRootRef} name="MedCraftSceneRoot">
-        {/* Sidewalk Pad */}
         {building.showSidewalk && (
-          <mesh
-            position={[0, -0.14, 0]}
-            receiveShadow
-            onPointerMove={(e) => handleSurfaceMove(e, 'floor')}
-            onClick={(e) => handleSurfaceClick(e, 'floor')}
-          >
+          <mesh position={[0, -0.14, 0]} receiveShadow onPointerMove={(e) => handleSurfaceMove(e, 'floor')} onClick={(e) => handleSurfaceClick(e, 'floor')}>
             <boxGeometry args={[building.width + 5.2, 0.16, building.depth + 5.2]} />
             <meshStandardMaterial color="#c9b8a7" roughness={0.92} />
           </mesh>
         )}
 
-        {/* Ground Floor Slab */}
-        <mesh
-          position={[0, -0.04, 0]}
-          receiveShadow
-          onPointerMove={(e) => handleSurfaceMove(e, 'floor')}
-          onClick={(e) => handleSurfaceClick(e, 'floor')}
-        >
+        <mesh position={[0, -0.04, 0]} receiveShadow onPointerMove={(e) => handleSurfaceMove(e, 'floor')} onClick={(e) => handleSurfaceClick(e, 'floor')}>
           <boxGeometry args={[building.width, 0.1, building.depth]} />
           <meshStandardMaterial map={gfFloorTex} roughness={0.75} />
         </mesh>
 
-        {/* Upper Floor Slab with Live CSG Boolean Subtraction */}
         <UpperFloorSlabCSG onSurfaceMove={handleSurfaceMove} onSurfaceClick={handleSurfaceClick} />
 
-        {/* Walls with Live CSG Boolean Subtraction + Click-to-Paint */}
         {walls.map((w) => (
           <WallCSGMesh
             key={w.id}
             wall={w}
             floorHeight={building.floorHeight}
             cutMode={wallCutMode}
+            activeFloor={activeFloor}
             weathering={building.weathering}
             seed={building.seed}
             onSurfaceMove={handleSurfaceMove}
@@ -406,10 +395,8 @@ export function Viewport3D({ sceneRootRef }: { sceneRootRef: React.RefObject<THR
           />
         ))}
 
-        {/* Procedural Roof */}
         <ProceduralRoof cutMode={wallCutMode} />
 
-        {/* Interactive Selectable & Editable Scene Nodes */}
         {nodes.map((node) => (
           <SelectableNode
             key={node.id}
@@ -421,7 +408,6 @@ export function Viewport3D({ sceneRootRef }: { sceneRootRef: React.RefObject<THR
         ))}
       </group>
 
-      {/* Surface-Aware Smart Placement Ghost */}
       {toolMode === 'place_object' && placingDraft && ghostPose && (
         <group position={ghostPose.position} rotation={ghostPose.rotation}>
           <ProceduralObjectMesh recipe={placingDraft.recipe} shutterColor={building.shutterColor} trimColor={building.trimColor} />
@@ -432,7 +418,6 @@ export function Viewport3D({ sceneRootRef }: { sceneRootRef: React.RefObject<THR
         </group>
       )}
 
-      {/* Sims 4 Freeform Wall Draw Preview */}
       {toolMode === 'draw_wall' && wallStart && wallCursor && (
         <WallDrawPreview start={wallStart} end={wallCursor} height={previewWallH} />
       )}
