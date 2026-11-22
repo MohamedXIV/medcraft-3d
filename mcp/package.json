@@ -1,0 +1,15 @@
+{
+  "name": "medcraft-3d-mcp",
+  "version": "1.0.0",
+  "description": "MCP server enabling AI agents to control MedCraft 3D procedurally",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "playwright": "^1.52.0",
+    "zod": "^3.24.0"
+  }
+}
