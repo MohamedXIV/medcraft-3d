@@ -1,5 +1,5 @@
 // =========================================================================
-// 1. DETERMINISTIC PRNG & STATE MODEL
+// 1. DETERMINISTIC PRNG & STATE MODEL (Decoupled Building / Interior / Env / Camera FX)
 // =========================================================================
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -23,7 +23,7 @@ const PALETTES = [
 const PRESETS = {
   corner_pharmacy: {
     floors: 2, width: 9.0, depth: 7.5, floorH: 3.1, cornerChamfer: true, showSidewalk: true,
-    hasInterior: true, doorOpen: true,
+    hasInterior: true, showInteriorProps: true, doorOpen: true,
     shopType: 'pharmacy', hasAwning: true, hasShutters: true, hasFlowerBoxes: true,
     hasBalconies: true, hasLaundry: false, hasVines: false, hasWallAC: true, hasStreetProps: true,
     winDensity: 1.0, roofType: 'flat', hasWaterTank: true, hasDish: true, hasRoofAC: true,
@@ -32,7 +32,7 @@ const PRESETS = {
   },
   cafe_townhouse: {
     floors: 2, width: 8.5, depth: 7.0, floorH: 3.1, cornerChamfer: false, showSidewalk: true,
-    hasInterior: true, doorOpen: true,
+    hasInterior: true, showInteriorProps: true, doorOpen: true,
     shopType: 'cafe', hasAwning: true, hasShutters: true, hasFlowerBoxes: true,
     hasBalconies: true, hasLaundry: true, hasVines: true, hasWallAC: true, hasStreetProps: true,
     winDensity: 1.0, roofType: 'flat', hasWaterTank: true, hasDish: true, hasRoofAC: true,
@@ -41,7 +41,7 @@ const PRESETS = {
   },
   market_shop: {
     floors: 2, width: 9.5, depth: 7.0, floorH: 3.0, cornerChamfer: false, showSidewalk: true,
-    hasInterior: true, doorOpen: true,
+    hasInterior: true, showInteriorProps: true, doorOpen: true,
     shopType: 'market', hasAwning: true, hasShutters: true, hasFlowerBoxes: true,
     hasBalconies: false, hasLaundry: false, hasVines: true, hasWallAC: true, hasStreetProps: true,
     winDensity: 1.1, roofType: 'flat', hasWaterTank: false, hasDish: false, hasRoofAC: true,
@@ -50,7 +50,7 @@ const PRESETS = {
   },
   med_villa: {
     floors: 2, width: 9.0, depth: 7.5, floorH: 3.0, cornerChamfer: false, showSidewalk: true,
-    hasInterior: true, doorOpen: true,
+    hasInterior: true, showInteriorProps: true, doorOpen: true,
     shopType: 'residential', hasAwning: false, hasShutters: true, hasFlowerBoxes: true,
     hasBalconies: true, hasLaundry: false, hasVines: true, hasWallAC: false, hasStreetProps: true,
     winDensity: 1.0, roofType: 'hipped', hasWaterTank: false, hasDish: true, hasRoofAC: false,
@@ -59,7 +59,7 @@ const PRESETS = {
   },
   town_hall: {
     floors: 2, width: 13.5, depth: 7.5, floorH: 3.3, cornerChamfer: false, showSidewalk: true,
-    hasInterior: true, doorOpen: true,
+    hasInterior: true, showInteriorProps: true, doorOpen: true,
     shopType: 'civic', hasAwning: false, hasShutters: false, hasFlowerBoxes: true,
     hasBalconies: false, hasLaundry: false, hasVines: false, hasWallAC: false, hasStreetProps: true,
     winDensity: 1.1, roofType: 'civic', hasWaterTank: false, hasDish: false, hasRoofAC: false,
@@ -68,7 +68,7 @@ const PRESETS = {
   },
   workshop: {
     floors: 1, width: 11.5, depth: 8.5, floorH: 4.0, cornerChamfer: false, showSidewalk: true,
-    hasInterior: true, doorOpen: true,
+    hasInterior: true, showInteriorProps: true, doorOpen: true,
     shopType: 'workshop', hasAwning: false, hasShutters: false, hasFlowerBoxes: false,
     hasBalconies: false, hasLaundry: false, hasVines: false, hasWallAC: true, hasStreetProps: true,
     winDensity: 0.9, roofType: 'sawtooth', hasWaterTank: true, hasDish: false, hasRoofAC: false,
@@ -79,11 +79,35 @@ const PRESETS = {
 
 const state = {
   seed: 4027,
+  interiorSeed: 7319,
+  envSeed: 5192,
   preset: 'corner_pharmacy',
   ...PRESETS.corner_pharmacy,
+  interiorDensity: 1.0,
+  interiorStyle: 'warm',
+  showEnvironment: true,
+  envTrees: true,
+  envLamps: true,
+  envBenches: true,
+  envPlanters: true,
+  envDensity: 1.0,
+  exportStructure: true,
+  exportInterior: true,
+  exportEnvironment: false,
+  viewMode: 'exterior',
+  wallCutMode: 'cutaway',
+  activeFloor: 0,
+  projection: 'perspective',
+  fov: 38,
+  exposure: 1.08,
+  postFxEnabled: true,
+  dofAmount: 0.28,
+  dofFocus: 0.50,
+  bloomAmount: 0.22,
+  outlineAmount: 0.18,
+  vignetteAmount: 0.25,
+  warmthAmount: 0.15,
   lighting: 'golden',
   wireframe: false,
-  autoRotate: false,
-  viewMode: 'exterior',
-  activeFloor: 0
+  autoRotate: false
 };

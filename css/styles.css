@@ -1,5 +1,5 @@
 :root {
-  --bg-panel: rgba(24, 21, 19, 0.90);
+  --bg-panel: rgba(24, 21, 19, 0.91);
   --border-soft: rgba(245, 222, 195, 0.14);
   --accent: #e07a5f;
   --accent-hover: #f28f73;
@@ -107,6 +107,12 @@ input[type="color"]::-webkit-color-swatch { border: none; border-radius: 5px; }
 }
 .toggle-pill.on::after {
   transform: translateX(-17px);
+}
+.export-chk {
+  accent-color: #81b29a;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
 }
 #viewport {
   width: 100%;
