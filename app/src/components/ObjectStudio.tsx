@@ -58,12 +58,7 @@ export function ObjectStudio() {
     setTimeout(() => setSavedMsg(''), 2200);
 
     if (placeImmediately) {
-      startPlacing({
-        name: item.name,
-        recipe: item.recipe,
-        placementRule: item.placementRule,
-        booleanCutter: item.defaultBooleanCutter
-      });
+      startPlacing({ name: item.name, recipe: item.recipe, placementRule: item.placementRule, booleanCutter: item.defaultBooleanCutter });
     }
   };
 
@@ -81,38 +76,23 @@ export function ObjectStudio() {
         <OrbitControls makeDefault autoRotate autoRotateSpeed={1.2} />
       </Canvas>
 
-      {/* Studio Control Panel */}
-      <aside className="fixed top-16 right-3 bottom-3 z-20 w-[320px] bg-[#181513]/92 backdrop-blur-md border border-white/15 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-xs">
-        <div className="p-3 border-b border-white/10 bg-black/25 font-extrabold text-[#fff5eb] flex items-center gap-1.5">
+      <aside className="fixed top-16 right-3 bottom-3 z-20 w-[320px] studio-panel rounded-2xl flex flex-col overflow-hidden text-xs text-[#f6efe8]">
+        <div className="p-3 border-b border-white/10 bg-black/30 font-extrabold text-[#fff5eb] flex items-center gap-1.5">
           <Sparkles className="w-4 h-4 text-[#81b29a]" />
           <span>استوديو الأصول المعزول (Object Studio)</span>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-3.5">
+        <div className="flex-1 overflow-y-auto studio-scroll p-3 space-y-3.5">
           <div>
             <label className="block font-bold text-[#f2cc8f] mb-1">اسم القطعة</label>
-            <input
-              type="text"
-              value={assetName}
-              onChange={(e) => setAssetName(e.target.value)}
-              className="w-full bg-[#241f1c] border border-white/15 rounded-xl px-2.5 py-1.5 text-white text-xs"
-            />
+            <input type="text" value={assetName} onChange={(e) => setAssetName(e.target.value)} className="w-full bg-[#2b2521] border border-white/20 rounded-xl px-2.5 py-1.5 text-white text-xs" />
           </div>
 
           <div>
             <div className="font-bold text-[#f2cc8f] mb-1.5">نوع العنصر الإجرائي</div>
             <div className="grid grid-cols-1 gap-1">
               {CATEGORIES.map((c) => (
-                <button
-                  key={c.kind}
-                  onClick={() => {
-                    setKind(c.kind);
-                    setAssetName(c.label);
-                  }}
-                  className={`text-right px-2.5 py-1.5 rounded-xl border text-[11px] transition ${
-                    kind === c.kind ? 'bg-[#e07a5f]/25 border-[#e07a5f] text-white font-bold' : 'bg-white/5 border-white/10 text-[#d6c6b8] hover:bg-white/10'
-                  }`}
-                >
+                <button key={c.kind} onClick={() => { setKind(c.kind); setAssetName(c.label); }} className={`text-right px-2.5 py-1.5 rounded-xl border text-[11px] transition ${kind === c.kind ? 'bg-[#e07a5f]/30 border-[#e07a5f] text-white font-bold' : 'bg-white/5 border-white/10 text-[#e8dcd0] hover:bg-white/10'}`}>
                   {c.label}
                 </button>
               ))}
@@ -121,50 +101,27 @@ export function ObjectStudio() {
 
           <div className="pt-2 border-t border-white/10 space-y-2.5">
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSeed(Math.floor(100 + Math.random() * 98000))}
-                className="flex-1 bg-[#e07a5f]/25 hover:bg-[#e07a5f]/40 border border-[#e07a5f]/50 text-[#ffbfa8] font-bold py-1.5 rounded-xl flex items-center justify-center gap-1"
-              >
-                <Dices className="w-3.5 h-3.5" /><span>تنويعة عشوائية</span>
-              </button>
+              <button onClick={() => setSeed(Math.floor(100 + Math.random() * 98000))} className="flex-1 bg-[#e07a5f]/30 hover:bg-[#e07a5f]/45 border border-[#e07a5f]/50 text-[#ffd3c2] font-bold py-1.5 rounded-xl flex items-center justify-center gap-1"><Dices className="w-3.5 h-3.5" /><span>تنويعة عشوائية</span></button>
               <span className="font-mono text-[11px] px-2 py-1 rounded-lg bg-white/5 border border-white/10">#{seed}</span>
             </div>
-
             <div>
-              <div className="flex justify-between mb-1"><span>الحجم (Scale)</span><span className="font-mono text-[#ffbfa8]">{scale.toFixed(2)}x</span></div>
+              <div className="flex justify-between mb-1"><span>الحجم (Scale)</span><span className="font-mono text-[#ffd3c2]">{scale.toFixed(2)}x</span></div>
               <input type="range" min={0.5} max={2.0} step={0.05} value={scale} onChange={(e) => setScale(parseFloat(e.target.value))} className="w-full" />
             </div>
-
             <div className="grid grid-cols-2 gap-2">
-              <label className="flex items-center justify-between bg-white/5 px-2 py-1 rounded-xl border border-white/10">
-                <span>لون الشيش</span>
-                <input type="color" value={shutterColor} onChange={(e) => setShutterColor(e.target.value)} />
-              </label>
-              <label className="flex items-center justify-between bg-white/5 px-2 py-1 rounded-xl border border-white/10">
-                <span>لون الإطار</span>
-                <input type="color" value={trimColor} onChange={(e) => setTrimColor(e.target.value)} />
-              </label>
+              <label className="flex items-center justify-between bg-white/5 px-2 py-1 rounded-xl border border-white/10"><span>الشيش</span><input type="color" value={shutterColor} onChange={(e) => setShutterColor(e.target.value)} /></label>
+              <label className="flex items-center justify-between bg-white/5 px-2 py-1 rounded-xl border border-white/10"><span>الإطار</span><input type="color" value={trimColor} onChange={(e) => setTrimColor(e.target.value)} /></label>
             </div>
           </div>
 
-          {savedMsg && <div className="p-2 rounded-xl bg-[#81b29a]/25 text-[#b7ebd0] text-center font-bold">{savedMsg}</div>}
+          {savedMsg && <div className="p-2 rounded-xl bg-[#81b29a]/30 text-[#c9f7df] text-center font-bold">{savedMsg}</div>}
         </div>
 
-        <div className="p-2.5 border-t border-white/10 bg-black/35 space-y-1.5">
-          <button
-            onClick={() => handleSave(true)}
-            className="w-full bg-[#e07a5f] hover:bg-[#eb886d] text-white font-extrabold py-2 rounded-xl flex items-center justify-center gap-1.5"
-          >
-            <BookmarkPlus className="w-4 h-4" /><span>حفظ في المكتبة ووضعه في المشهد</span>
-          </button>
+        <div className="p-2.5 border-t border-white/10 bg-black/40 space-y-1.5">
+          <button onClick={() => handleSave(true)} className="w-full bg-[#e07a5f] hover:bg-[#eb886d] text-white font-extrabold py-2 rounded-xl flex items-center justify-center gap-1.5"><BookmarkPlus className="w-4 h-4" /><span>حفظ في المكتبة ووضعه في المشهد</span></button>
           <div className="grid grid-cols-2 gap-1.5">
             <button onClick={() => handleSave(false)} className="bg-white/10 hover:bg-white/20 text-white font-bold py-1.5 rounded-xl">حفظ فقط</button>
-            <button
-              onClick={() => assetRootRef.current && exportObject3DToGLB(assetRootRef.current, `${kind}-${seed}.glb`)}
-              className="bg-[#81b29a] text-[#111c16] font-extrabold py-1.5 rounded-xl flex items-center justify-center gap-1"
-            >
-              <Download className="w-3.5 h-3.5" /><span>GLB</span>
-            </button>
+            <button onClick={() => assetRootRef.current && exportObject3DToGLB(assetRootRef.current, `${kind}-${seed}.glb`)} className="bg-[#81b29a] text-[#111c16] font-extrabold py-1.5 rounded-xl flex items-center justify-center gap-1"><Download className="w-3.5 h-3.5" /><span>GLB</span></button>
           </div>
         </div>
       </aside>
